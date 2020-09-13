@@ -24,8 +24,7 @@ func handleConnection(connection net.Conn) {
 	
 	data, err := connection.ReadPacket()
 	if err != nil {
-		fmt.Println("Failed To Read Data!")
-		fmt.Println(err)
+		fmt.Println("Failed To Read Data: ", err)
 		return
 	}
 	
@@ -58,9 +57,12 @@ func handlePing(connection net.Conn) {
 			default:
 				fmt.Println("Invalid Packet Id!")
 			case 0x00:
-				err = connection.WritePacket(packet.Marshal(0x00, packet.String(`{"version":{"name":"1.16.2","protocol":751},"players":{"max":5,"online":0,"sample":[{"name":"thinkofdeath","id":"4566e69f-c907-48ee-8d71-d7ba5aa00d20"}]},"description":{"text":"This is an amazing server"},"favicon":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABAAQMAAACQp+OdAAABb2lDQ1BpY2MAACiRdZE7SwNBFIW/JIqvSEAtRERSxEeRgCiIpcYiTZAQIxi1SdY8hDyW3QQJtoKNRcBCtPFV+A+0FWwVBEERRCz8Bb4aCesdE0iQOMvs/Tgz5zJzBuzBjJY1W8YhmysY4YDfvRRddre90oGTHkYZimmmPhsKBfl3fN1jU/XOp3r9v6/p6FpLmBrY2oWnNN0oCM8IBzcKuuId4T4tHVsTPhL2GnJA4Wulx6v8ojhV5Q/FRiQ8B3bV051q4HgDa2kjKzwm7MlmilrtPOomzkRucUHqgMxBTMIE8OMmTpF1MhTwSc1JZs1947++efLi0eSvU8IQR4q0eL2iFqVrQmpS9IR8GUoq9795msnJiWp3px9any3rfRjadqFStqzvY8uqnIDjCS5zdX9ecpr+FL1c1zyH4NqC86u6Ft+Di23of9RjRuxXcsi0J5PwdgbdUei9hc6Vala1dU4fILIpT3QD+wcwIvtdqz/y22gEXjTGVwAAAAZQTFRF////AAAAVcLTfgAAAAlwSFlzAAAAJwAAACcBKgmRTwAAAV9JREFUKM9tkTFPwkAYhg9CaeJEKowmgDYNCwmb2qUSjpStmF6PwSYuWOPUNL3cWjZGonFwYDSp8Q8QXGDjB+jIf/E9jBP9pifv3fvd995HyH8JqcciBpgXZcd0AJZVjq17pbTKtYNi4o4Zk6KKpC65OvL7Fep7gIdEj4KDYpSGvuoTJbqwvEK7kJWV/ZURQmk1b3egTCMtt68uoQy1/KQHJRGDlf2ZFdpTD++jNRt4ba2vIG229T4H1Jt/ipTNREsKp08psguBUSmyMwqlj+yMqzjIzhghPEF2KZwCO2Oz5T7cbgjzb8aNMckI283ezsIM4JbGDQql486WP3vcOS6Zrs4/trs5ki5aPTQhcgrIXn1Sp4tWhwDSdGG/b+bzAjvncSTCrhrDYWyU4zd4zMXoCUpQC5gCLuLp7bJb/PNV6V6v77B3jT0aLx72rsnJ6fM39q4FE0OBrDLXWIfH7l+9b2jYO4Q0tgAAAABJRU5ErkJggg=="}`)))
+				err = connection.WritePacket(packet.Marshal(0x00, packet.String(`{"version":{"name":"1.16.2","protocol":751},"players":{"max":5,"online":700,"sample":[{"name":"WatterBottle","id":"c8fe4d7e-9d7f-49f8-ba19-3ec7a22f62a6"}]},"description":{"text":"This is an amazing server"},"favicon":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABAAQMAAACQp+OdAAABb2lDQ1BpY2MAACiRdZE7SwNBFIW/JIqvSEAtRERSxEeRgCiIpcYiTZAQIxi1SdY8hDyW3QQJtoKNRcBCtPFV+A+0FWwVBEERRCz8Bb4aCesdE0iQOMvs/Tgz5zJzBuzBjJY1W8YhmysY4YDfvRRddre90oGTHkYZimmmPhsKBfl3fN1jU/XOp3r9v6/p6FpLmBrY2oWnNN0oCM8IBzcKuuId4T4tHVsTPhL2GnJA4Wulx6v8ojhV5Q/FRiQ8B3bV051q4HgDa2kjKzwm7MlmilrtPOomzkRucUHqgMxBTMIE8OMmTpF1MhTwSc1JZs1947++efLi0eSvU8IQR4q0eL2iFqVrQmpS9IR8GUoq9795msnJiWp3px9any3rfRjadqFStqzvY8uqnIDjCS5zdX9ecpr+FL1c1zyH4NqC86u6Ft+Di23of9RjRuxXcsi0J5PwdgbdUei9hc6Vala1dU4fILIpT3QD+wcwIvtdqz/y22gEXjTGVwAAAAZQTFRF////AAAAVcLTfgAAAAlwSFlzAAAAJwAAACcBKgmRTwAAAV9JREFUKM9tkTFPwkAYhg9CaeJEKowmgDYNCwmb2qUSjpStmF6PwSYuWOPUNL3cWjZGonFwYDSp8Q8QXGDjB+jIf/E9jBP9pifv3fvd995HyH8JqcciBpgXZcd0AJZVjq17pbTKtYNi4o4Zk6KKpC65OvL7Fep7gIdEj4KDYpSGvuoTJbqwvEK7kJWV/ZURQmk1b3egTCMtt68uoQy1/KQHJRGDlf2ZFdpTD++jNRt4ba2vIG229T4H1Jt/ipTNREsKp08psguBUSmyMwqlj+yMqzjIzhghPEF2KZwCO2Oz5T7cbgjzb8aNMckI283ezsIM4JbGDQql486WP3vcOS6Zrs4/trs5ki5aPTQhcgrIXn1Sp4tWhwDSdGG/b+bzAjvncSTCrhrDYWyU4zd4zMXoCUpQC5gCLuLp7bJb/PNV6V6v77B3jT0aLx72rsnJ6fM39q4FE0OBrDLXWIfH7l+9b2jYO4Q0tgAAAABJRU5ErkJggg=="}`)))
 			case 0x01:
-				
+				err = connection.WritePacket(data)
+		}
+		if err != nil {
+			fmt.Println("Failed To Write Packet: ", err)
 		}
 	}
 }
@@ -73,8 +75,7 @@ func main() {
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Failed To Recive Connection!")
-			fmt.Println(err)
+			fmt.Println("Failed To Recive Connection: ", err)
 		}
 		go handleConnection(connection)
 	}
