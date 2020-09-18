@@ -5,6 +5,10 @@ import "os"
 import "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
 
+type Player struct {
+	name string
+}
+
 func startListener() *net.Listener {
 	listener, err := net.ListenMC(":25565")
 	if err != nil {
@@ -34,16 +38,17 @@ func handleConnection(connection net.Conn) {
 		return
 	}
 	
+	fmt.Printf("packet: %b\n\tProtocal: %d\n\tServer Address: %s\n\tServer Port: %d\n\tIntention: %d\n", data, Protocol, ServerAddress, ServerPort, Intention)
+	
 	switch Intention {
 		default:
 			fmt.Println("Unknown Intention!")
 		case 1:
 			handlePing(connection)
 		case 2:
-			fmt.Println("Login Not Implimented Yet!")
+			handleLogin(connection)
 	}
 	
-	fmt.Printf("packet: %b\n\tProtocal: %d\n\tServer Address: %s\n\tServer Port: %d\n\tIntention: %d\n", data, Protocol, ServerAddress, ServerPort, Intention)
 }
 
 func handlePing(connection net.Conn) {
@@ -63,6 +68,27 @@ func handlePing(connection net.Conn) {
 		}
 		if err != nil {
 			fmt.Println("Failed To Write Packet: ", err)
+		}
+	}
+}
+
+func handleLogin(connection net.Conn) {
+	for packetNum := 0; packetNum < 2; packetNum++ {
+		data, err := connection.ReadPacket()
+		if err != nil {
+			fmt.Println("Failed To Read Text!", err)
+			return
+		}
+		
+		switch data.ID {
+			case 0x00:
+			var player Player
+				err = data.Scan((*packet.String)(&player.name))
+				if err != nil {
+					fmt.Println("Failed To Read Text!", err)
+				}
+				
+				fmt.Println(player.name)
 		}
 	}
 }
