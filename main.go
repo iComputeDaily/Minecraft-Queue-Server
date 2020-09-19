@@ -4,10 +4,12 @@ import "fmt"
 import "os"
 import "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
+import "crypto/rand" 
 
 // Player represents information about a connected player.
 type Player struct {
 	name string
+	uuid packet.UUID
 }
 
 // startListener is called once to start listening for connections.
@@ -102,6 +104,18 @@ func handleLogin(connection net.Conn) {
 				}
 				
 				fmt.Println("Player Name:", player.name, "Requested join")
+				
+				_, err = rand.Read(player.uuid[:])
+				if err != nil {
+					fmt.Println("Failed To Read Random UUID! Error: ", err)
+					return
+				}
+				
+				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
+				if err != nil {
+					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
+					return
+				}
 		}
 	}
 }
