@@ -7,6 +7,7 @@ import "github.com/Tnze/go-mc/net/packet"
 import "crypto/rand"
 import "crypto/rsa"
 import "crypto/x509"
+import "errors"
 
 // Player represents information about a connected player.
 type Player struct {
@@ -100,11 +101,9 @@ func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
 			default:
 				fmt.Println("Invalid Login Packet Id! ID: ", data.ID)
 			case 0x00:
-				var player Player
-				err = data.Scan((*packet.String)(&player.name))
+				player, err := handleLoginStart(data)
 				if err != nil {
 					fmt.Println("Failed To Parse Login Packet! Error: ", err)
-					return
 				}
 				
 				fmt.Println("Player Name:", player.name, "Requested join")
@@ -114,67 +113,90 @@ func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
 					fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
 					return
 				}
+				sendEncRequest(privKey, token, connection)
 				
-				derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
-				if err != nil {
-					fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
-					return
-				}
-				
-				err = connection.WritePacket(packet.Marshal(0x01, packet.String(""), packet.ByteArray(derPubKey), packet.ByteArray(token[:])))
-				if err != nil {
-					fmt.Println("Failed To Write Encryption Rquest Packet! Error: ", err)
-					return
-				}
 			case 0x01:
-				var (
-					encSharedSecret, encVerifyToken packet.ByteArray
-				)
-				
-				err = data.Scan(&encSharedSecret, &encVerifyToken)
-				if err != nil {
-					fmt.Println("Failed To Parse Encryption Response Packet! Error: ", err)
-					return
-				}
-				fmt.Println(encSharedSecret, encVerifyToken)
-				
-				var decVerifyToken [4]byte
-				err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encVerifyToken, decVerifyToken[:])
-				if err != nil {
-					fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
-					return
-				}
-				if token != decVerifyToken {
-					fmt.Println("Verify Tokens Do not Match!")
-					return
-				}
-				
-				var decSharedSecret [16]byte
-				err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encSharedSecret, decSharedSecret[:])
-				if err != nil {
-					fmt.Println("Failed To Decrypt Shared Secret! Error: ", err)
-					return
-				}
-				
-				// BUG(iComputeDaily): Might need to send raw public key data not shure
-				err = authUser(decSharedSecret, derPubKey)
-				//				_, err = rand.Read(player.uuid[:])
-				//				if err != nil {
-				//					fmt.Println("Failed To Read Random UUID! Error: ", err)
-				//					return
-				//				}
-				
-				//				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
-				//				if err != nil {
-				//					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
-				//					return
-				//				}
+				err = handleEncResponse(data, privKey, token)
 		}
 	}
 }
 
-func authUser(sharedSecret [16]byte, pubKey []byte) error {
+func handleLoginStart(data packet.Packet) (Player, error) {
+	var player Player
+	err := data.Scan((*packet.String)(&player.name))
+	if err != nil {
+		return player, err
+	}
 	
+	return player, nil
+}
+
+func sendEncRequest(privKey *rsa.PrivateKey, token [4]byte, connection net.Conn) error {
+	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
+	if err != nil {
+		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
+		return errors.New("1")
+	}
+	
+	err = connection.WritePacket(packet.Marshal(0x01, packet.String(""), packet.ByteArray(derPubKey), packet.ByteArray(token[:])))
+	if err != nil {
+		fmt.Println("Failed To Write Encryption Rquest Packet! Error: ", err)
+		return errors.New("1")
+	}
+	
+	return nil
+}
+
+func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byte) error {
+	var (
+		encSharedSecret, encVerifyToken packet.ByteArray
+	)
+	
+	err := data.Scan(&encSharedSecret, &encVerifyToken)
+	if err != nil {
+		fmt.Println("Failed To Parse Encryption Response Packet! Error: ", err)
+		return errors.New("1")
+	}
+	fmt.Println(encSharedSecret, encVerifyToken)
+	
+	var decVerifyToken [4]byte
+	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encVerifyToken, decVerifyToken[:])
+	if err != nil {
+		fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
+		return errors.New("1")
+	}
+	if token != decVerifyToken {
+		fmt.Println("Verify Tokens Do not Match!")
+		return errors.New("1")
+	}
+	
+	var decSharedSecret [16]byte
+	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encSharedSecret, decSharedSecret[:])
+	if err != nil {
+		fmt.Println("Failed To Decrypt Shared Secret! Error: ", err)
+		return errors.New("1")
+	}
+	
+	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
+	if err != nil {
+		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
+		return errors.New("1")
+	}
+	
+	// BUG(iComputeDaily): Might need to send raw public key data not shure
+	err = authUser(decSharedSecret, derPubKey)
+	
+	//				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
+	//				if err != nil {
+	//					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
+	//					return
+	//				}
+	
+	return nil
+}
+
+func authUser(sharedSecret [16]byte, pubKey []byte) error {
+	return nil
 }
 
 func main() {
