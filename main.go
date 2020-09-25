@@ -4,7 +4,9 @@ import "fmt"
 import "os"
 import "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
-import "crypto/rand" 
+import "crypto/rand"
+import "crypto/rsa"
+import "crypto/x509"
 
 // Player represents information about a connected player.
 type Player struct {
@@ -23,7 +25,7 @@ func startListener() *net.Listener {
 }
 
 // handleConnection is called on al incomming connections.
-func handleConnection(connection net.Conn) {
+func handleConnection(connection net.Conn, privKey *rsa.PrivateKey) {
 	defer connection.Close()
 	
 	var (
@@ -53,7 +55,7 @@ func handleConnection(connection net.Conn) {
 		case 1:
 			handlePing(connection)
 		case 2:
-			handleLogin(connection)
+			handleLogin(connection, privKey)
 	}
 	
 }
@@ -84,8 +86,10 @@ func handlePing(connection net.Conn) {
 }
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
-func handleLogin(connection net.Conn) {
-	for packetNum := 0; packetNum < 1; packetNum++ {
+func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
+	var token [4]byte
+	
+	for packetNum := 0; packetNum < 2; packetNum++ {
 		data, err := connection.ReadPacket()
 		if err != nil {
 			fmt.Println("Failed To Read Login Packet! Error:", err)
@@ -105,19 +109,72 @@ func handleLogin(connection net.Conn) {
 				
 				fmt.Println("Player Name:", player.name, "Requested join")
 				
-				_, err = rand.Read(player.uuid[:])
+				_, err = rand.Read(token[:])
 				if err != nil {
-					fmt.Println("Failed To Read Random UUID! Error: ", err)
+					fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
 					return
 				}
 				
-				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
+				derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
 				if err != nil {
-					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
+					fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
 					return
 				}
+				
+				err = connection.WritePacket(packet.Marshal(0x01, packet.String(""), packet.ByteArray(derPubKey), packet.ByteArray(token[:])))
+				if err != nil {
+					fmt.Println("Failed To Write Encryption Rquest Packet! Error: ", err)
+					return
+				}
+			case 0x01:
+				var (
+					encSharedSecret, encVerifyToken packet.ByteArray
+				)
+				
+				err = data.Scan(&encSharedSecret, &encVerifyToken)
+				if err != nil {
+					fmt.Println("Failed To Parse Encryption Response Packet! Error: ", err)
+					return
+				}
+				fmt.Println(encSharedSecret, encVerifyToken)
+				
+				var decVerifyToken [4]byte
+				err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encVerifyToken, decVerifyToken[:])
+				if err != nil {
+					fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
+					return
+				}
+				if token != decVerifyToken {
+					fmt.Println("Verify Tokens Do not Match!")
+					return
+				}
+				
+				var decSharedSecret [16]byte
+				err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encSharedSecret, decSharedSecret[:])
+				if err != nil {
+					fmt.Println("Failed To Decrypt Shared Secret! Error: ", err)
+					return
+				}
+				
+				// BUG(iComputeDaily): Might need to send raw public key data not shure
+				err = authUser(decSharedSecret, derPubKey)
+				//				_, err = rand.Read(player.uuid[:])
+				//				if err != nil {
+				//					fmt.Println("Failed To Read Random UUID! Error: ", err)
+				//					return
+				//				}
+				
+				//				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
+				//				if err != nil {
+				//					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
+				//					return
+				//				}
 		}
 	}
+}
+
+func authUser(sharedSecret [16]byte, pubKey []byte) error {
+	
 }
 
 func main() {
@@ -125,12 +182,19 @@ func main() {
 	listener := startListener()
 	defer listener.Close()
 	
+	privKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		fmt.Println("Failed To Generate RSA Key! Error: ", err)
+		os.Exit(1)
+	}
+	privKey.Precompute()
+	
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
 			fmt.Println("Failed To Recive Connection! Error: ", err)
 			continue
 		}
-		go handleConnection(connection)
+		go handleConnection(connection, privKey)
 	}
 }
