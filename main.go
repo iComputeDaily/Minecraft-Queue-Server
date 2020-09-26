@@ -116,11 +116,23 @@ func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
 				sendEncRequest(privKey, token, connection)
 				
 			case 0x01:
-				err = handleEncResponse(data, privKey, token)
+				sharedSecret, err := handleEncResponse(data, privKey, token)
+				if err != nil {
+					fmt.Println("Failed To Prosses Encryption Response! Error: ", err)
+					return
+				}
+				
+				// BUG(iComputeDaily): Might need to send raw public key data not shure
+				err = authUser(sharedSecret, privKey)
+				if err != nil {
+					fmt.Println("Failed To Authenticate User! Error: ", err)
+					return
+				}
 		}
 	}
 }
 
+// handleLoginStart is called by handlelogin to process the login start packet
 func handleLoginStart(data packet.Packet) (Player, error) {
 	var player Player
 	err := data.Scan((*packet.String)(&player.name))
@@ -131,6 +143,7 @@ func handleLoginStart(data packet.Packet) (Player, error) {
 	return player, nil
 }
 
+// sendEncRequestRequest is called by handlelogin to send the encryption request packet
 func sendEncRequest(privKey *rsa.PrivateKey, token [4]byte, connection net.Conn) error {
 	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
 	if err != nil {
@@ -147,7 +160,8 @@ func sendEncRequest(privKey *rsa.PrivateKey, token [4]byte, connection net.Conn)
 	return nil
 }
 
-func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byte) error {
+// handleEncResponse is called by handlelogin to prosses the encryption response packet
+func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byte) ([16]byte, error) {
 	var (
 		encSharedSecret, encVerifyToken packet.ByteArray
 	)
@@ -155,7 +169,7 @@ func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byt
 	err := data.Scan(&encSharedSecret, &encVerifyToken)
 	if err != nil {
 		fmt.Println("Failed To Parse Encryption Response Packet! Error: ", err)
-		return errors.New("1")
+		return [16]byte{0}, errors.New("1")
 	}
 	fmt.Println(encSharedSecret, encVerifyToken)
 	
@@ -163,39 +177,33 @@ func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byt
 	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encVerifyToken, decVerifyToken[:])
 	if err != nil {
 		fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
-		return errors.New("1")
+		return [16]byte{0}, errors.New("1")
 	}
 	if token != decVerifyToken {
 		fmt.Println("Verify Tokens Do not Match!")
-		return errors.New("1")
+		return [16]byte{0}, errors.New("1")
 	}
 	
 	var decSharedSecret [16]byte
 	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encSharedSecret, decSharedSecret[:])
 	if err != nil {
 		fmt.Println("Failed To Decrypt Shared Secret! Error: ", err)
-		return errors.New("1")
+		return [16]byte{0}, errors.New("1")
 	}
 	
+	return decSharedSecret, nil
+}
+
+// authUser is called by handleLogin to authentication the user with mojang
+func authUser(sharedSecret [16]byte, privKey *rsa.PrivateKey) error {
 	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
 	if err != nil {
 		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
 		return errors.New("1")
 	}
 	
-	// BUG(iComputeDaily): Might need to send raw public key data not shure
-	err = authUser(decSharedSecret, derPubKey)
+	fmt.Println("PubKey:", derPubKey)
 	
-	//				err = connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
-	//				if err != nil {
-	//					fmt.Println("Failed To Write Login Sucsess Packet! Error: ", err)
-	//					return
-	//				}
-	
-	return nil
-}
-
-func authUser(sharedSecret [16]byte, pubKey []byte) error {
 	return nil
 }
 
