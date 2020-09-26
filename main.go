@@ -9,10 +9,13 @@ import "crypto/rsa"
 import "crypto/x509"
 import "errors"
 
+var privKey *rsa.PrivateKey
+
 // Player represents information about a connected player.
 type Player struct {
 	name string
 	uuid packet.UUID
+	connection net.Conn
 }
 
 // startListener is called once to start listening for connections.
@@ -26,7 +29,7 @@ func startListener() *net.Listener {
 }
 
 // handleConnection is called on al incomming connections.
-func handleConnection(connection net.Conn, privKey *rsa.PrivateKey) {
+func handleConnection(connection net.Conn) {
 	defer connection.Close()
 	
 	var (
@@ -56,7 +59,7 @@ func handleConnection(connection net.Conn, privKey *rsa.PrivateKey) {
 		case 1:
 			handlePing(connection)
 		case 2:
-			handleLogin(connection, privKey)
+			handleLogin(connection)
 	}
 	
 }
@@ -87,7 +90,7 @@ func handlePing(connection net.Conn) {
 }
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
-func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
+func handleLogin(connection net.Conn) {
 	var token [4]byte
 	
 	for packetNum := 0; packetNum < 2; packetNum++ {
@@ -113,17 +116,17 @@ func handleLogin(connection net.Conn, privKey *rsa.PrivateKey) {
 					fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
 					return
 				}
-				sendEncRequest(privKey, token, connection)
+				sendEncRequest(token, connection)
 				
 			case 0x01:
-				sharedSecret, err := handleEncResponse(data, privKey, token)
+				sharedSecret, err := handleEncResponse(data, token)
 				if err != nil {
 					fmt.Println("Failed To Prosses Encryption Response! Error: ", err)
 					return
 				}
 				
 				// BUG(iComputeDaily): Might need to send raw public key data not shure
-				err = authUser(sharedSecret, privKey)
+				err = authUser(sharedSecret)
 				if err != nil {
 					fmt.Println("Failed To Authenticate User! Error: ", err)
 					return
@@ -144,7 +147,7 @@ func handleLoginStart(data packet.Packet) (Player, error) {
 }
 
 // sendEncRequestRequest is called by handlelogin to send the encryption request packet
-func sendEncRequest(privKey *rsa.PrivateKey, token [4]byte, connection net.Conn) error {
+func sendEncRequest(token [4]byte, connection net.Conn) error {
 	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
 	if err != nil {
 		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
@@ -161,7 +164,7 @@ func sendEncRequest(privKey *rsa.PrivateKey, token [4]byte, connection net.Conn)
 }
 
 // handleEncResponse is called by handlelogin to prosses the encryption response packet
-func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byte) ([16]byte, error) {
+func handleEncResponse(data packet.Packet, token [4]byte) ([16]byte, error) {
 	var (
 		encSharedSecret, encVerifyToken packet.ByteArray
 	)
@@ -195,7 +198,7 @@ func handleEncResponse(data packet.Packet, privKey *rsa.PrivateKey, token [4]byt
 }
 
 // authUser is called by handleLogin to authentication the user with mojang
-func authUser(sharedSecret [16]byte, privKey *rsa.PrivateKey) error {
+func authUser(sharedSecret [16]byte) error {
 	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
 	if err != nil {
 		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
@@ -212,11 +215,13 @@ func main() {
 	listener := startListener()
 	defer listener.Close()
 	
-	privKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	var err error
+	privKey, err = rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		fmt.Println("Failed To Generate RSA Key! Error: ", err)
 		os.Exit(1)
 	}
+	
 	privKey.Precompute()
 	
 	for {
@@ -225,6 +230,6 @@ func main() {
 			fmt.Println("Failed To Recive Connection! Error: ", err)
 			continue
 		}
-		go handleConnection(connection, privKey)
+		go handleConnection(connection)
 	}
 }
