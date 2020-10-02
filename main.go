@@ -5,14 +5,14 @@ import "fmt"
 import "os"
 import "crypto/rand"
 import "crypto/rsa"
-import "github.com/Tnze/go-mc/net"
+import mcnet "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
 
 var PrivKey *rsa.PrivateKey
 
 // startListener is called once to start listening for connections.
-func startListener() *net.Listener {
-	listener, err := net.ListenMC(":25565")
+func startListener() *mcnet.Listener {
+	listener, err := mcnet.ListenMC(":25565")
 	if err != nil {
 		fmt.Println("Could Not Start Server. Aborting! Error: ", err)
 		os.Exit(1)
@@ -21,7 +21,7 @@ func startListener() *net.Listener {
 }
 
 // handleConnection is called on al incomming connections.
-func handleConnection(connection net.Conn) {
+func handleConnection(connection mcnet.Conn) {
 	defer connection.Close()
 	
 	var (
@@ -59,7 +59,7 @@ func handleConnection(connection net.Conn) {
 }
 
 // handlePing is called by handleConnection on any connections with handshake intention 1(status).
-func handlePing(connection net.Conn) {
+func handlePing(connection mcnet.Conn) {
 	for packetNum := 0; packetNum < 2; packetNum++ {
 		data, err := connection.ReadPacket()
 		if err != nil {

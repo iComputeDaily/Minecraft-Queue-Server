@@ -5,25 +5,25 @@ import "errors"
 import "crypto/rand"
 import "crypto/rsa"
 import "crypto/x509"
-import "crypto/cipher"
-import "github.com/Tnze/go-mc/net"
+// import "crypto/cipher"
+import mcnet "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
+import "crypto/sha1"
+import "strings"
 
 // Player represents information about a connected player.
 type Player struct {
 	name string
 	uuid packet.UUID
-	connection net.Conn
+	connection mcnet.Conn
 	token [4]byte
 	key [16]byte
-	encoStream, decoStream cipher.Stream
+//	encoStream, decoStream cipher.Stream
 }
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
 func (player *Player) handleLogin() {
 	for packetNum := 0; packetNum < 2; packetNum++ {
-		fmt.Println("Handlelogin loop was entered")
-		
 		data, err := player.connection.ReadPacket()
 		if err != nil {
 			fmt.Println("Failed To Read Login Packet! Error:", err)
@@ -105,7 +105,6 @@ func (player *Player) handleEncResponse(data packet.Packet) ([16]byte, error) {
 	if err != nil {
 		return [16]byte{0}, errors.New(fmt.Sprintln("Failed To Parse Encryption Response Packet! Error: ", err))
 	}
-	fmt.Println("encSharedSecret: ", encSharedSecret, "encVerifyToken: ", encVerifyToken)
 	
 	var decVerifyToken [4]byte
 	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, PrivKey, encVerifyToken, decVerifyToken[:])
@@ -129,12 +128,52 @@ func (player *Player) handleEncResponse(data packet.Packet) ([16]byte, error) {
 
 // authUser is called by handleLogin to authentication the user with mojang
 func (player *Player) authUser(sharedSecret [16]byte) error {
-	derPubKey, err := x509.MarshalPKIXPublicKey(PrivKey.Public())
+	hash, err := authDigest("", sharedSecret)
 	if err != nil {
-		return errors.New(fmt.Sprintln("Failed To Encode RSA Key To DER Format! Error: ", err))
+		return err
 	}
 	
-	fmt.Println("PubKey:", derPubKey)
+	fmt.Println("Hash:", hash)
 	
 	return nil
+}
+
+func authDigest(serverID string, sharedSecret [16]byte) (string, error) {
+	derPubKey, err := x509.MarshalPKIXPublicKey(PrivKey.Public())
+	if err != nil {
+		return "", errors.New(fmt.Sprintln("Failed To Encode RSA Key To DER Format! Error: ", err))
+	}
+	
+	h := sha1.New()
+	h.Write([]byte(serverID))
+	h.Write(sharedSecret[:])
+	h.Write(derPubKey)
+	hash := h.Sum(nil)
+	
+	// Check for negative hashes
+	negative := (hash[0] & 0x80) == 0x80
+	if negative {
+		hash = twosComplement(hash)
+	}
+	
+	// Trim away zeroes
+	res := strings.TrimLeft(fmt.Sprintf("%x", hash), "0")
+	if negative {
+		res = "-" + res
+	}
+	
+	return res, nil
+}
+
+// little endian
+func twosComplement(p []byte) []byte {
+	carry := true
+	for i := len(p) - 1; i >= 0; i-- {
+		p[i] = byte(^p[i])
+		if carry {
+			carry = p[i] == 0xff
+			p[i]++
+		}
+	}
+	return p
 }
