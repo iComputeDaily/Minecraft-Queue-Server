@@ -1,22 +1,14 @@
+// All roads lead to ro*cough* main
 package main
 
 import "fmt"
 import "os"
-import "github.com/Tnze/go-mc/net"
-import "github.com/Tnze/go-mc/net/packet"
 import "crypto/rand"
 import "crypto/rsa"
-import "crypto/x509"
-import "errors"
+import "github.com/Tnze/go-mc/net"
+import "github.com/Tnze/go-mc/net/packet"
 
-var privKey *rsa.PrivateKey
-
-// Player represents information about a connected player.
-type Player struct {
-	name string
-	uuid packet.UUID
-	connection net.Conn
-}
+var PrivKey *rsa.PrivateKey
 
 // startListener is called once to start listening for connections.
 func startListener() *net.Listener {
@@ -59,7 +51,9 @@ func handleConnection(connection net.Conn) {
 		case 1:
 			handlePing(connection)
 		case 2:
-			handleLogin(connection)
+			var player Player
+			player.connection = connection
+			player.handleLogin()
 	}
 	
 }
@@ -89,140 +83,19 @@ func handlePing(connection net.Conn) {
 	}
 }
 
-// handleLogin is called by handleConnection on any connections with handshake intention 2(login).
-func handleLogin(connection net.Conn) {
-	var token [4]byte
-	
-	for packetNum := 0; packetNum < 2; packetNum++ {
-		data, err := connection.ReadPacket()
-		if err != nil {
-			fmt.Println("Failed To Read Login Packet! Error:", err)
-			return
-		}
-		
-		switch data.ID {
-			default:
-				fmt.Println("Invalid Login Packet Id! ID: ", data.ID)
-			case 0x00:
-				player, err := handleLoginStart(data)
-				if err != nil {
-					fmt.Println("Failed To Parse Login Packet! Error: ", err)
-				}
-				
-				fmt.Println("Player Name:", player.name, "Requested join")
-				
-				_, err = rand.Read(token[:])
-				if err != nil {
-					fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
-					return
-				}
-				sendEncRequest(token, connection)
-				
-			case 0x01:
-				sharedSecret, err := handleEncResponse(data, token)
-				if err != nil {
-					fmt.Println("Failed To Prosses Encryption Response! Error: ", err)
-					return
-				}
-				
-				// BUG(iComputeDaily): Might need to send raw public key data not shure
-				err = authUser(sharedSecret)
-				if err != nil {
-					fmt.Println("Failed To Authenticate User! Error: ", err)
-					return
-				}
-		}
-	}
-}
-
-// handleLoginStart is called by handlelogin to process the login start packet
-func handleLoginStart(data packet.Packet) (Player, error) {
-	var player Player
-	err := data.Scan((*packet.String)(&player.name))
-	if err != nil {
-		return player, err
-	}
-	
-	return player, nil
-}
-
-// sendEncRequestRequest is called by handlelogin to send the encryption request packet
-func sendEncRequest(token [4]byte, connection net.Conn) error {
-	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
-	if err != nil {
-		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
-		return errors.New("1")
-	}
-	
-	err = connection.WritePacket(packet.Marshal(0x01, packet.String(""), packet.ByteArray(derPubKey), packet.ByteArray(token[:])))
-	if err != nil {
-		fmt.Println("Failed To Write Encryption Rquest Packet! Error: ", err)
-		return errors.New("1")
-	}
-	
-	return nil
-}
-
-// handleEncResponse is called by handlelogin to prosses the encryption response packet
-func handleEncResponse(data packet.Packet, token [4]byte) ([16]byte, error) {
-	var (
-		encSharedSecret, encVerifyToken packet.ByteArray
-	)
-	
-	err := data.Scan(&encSharedSecret, &encVerifyToken)
-	if err != nil {
-		fmt.Println("Failed To Parse Encryption Response Packet! Error: ", err)
-		return [16]byte{0}, errors.New("1")
-	}
-	fmt.Println(encSharedSecret, encVerifyToken)
-	
-	var decVerifyToken [4]byte
-	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encVerifyToken, decVerifyToken[:])
-	if err != nil {
-		fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
-		return [16]byte{0}, errors.New("1")
-	}
-	if token != decVerifyToken {
-		fmt.Println("Verify Tokens Do not Match!")
-		return [16]byte{0}, errors.New("1")
-	}
-	
-	var decSharedSecret [16]byte
-	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, privKey, encSharedSecret, decSharedSecret[:])
-	if err != nil {
-		fmt.Println("Failed To Decrypt Shared Secret! Error: ", err)
-		return [16]byte{0}, errors.New("1")
-	}
-	
-	return decSharedSecret, nil
-}
-
-// authUser is called by handleLogin to authentication the user with mojang
-func authUser(sharedSecret [16]byte) error {
-	derPubKey, err := x509.MarshalPKIXPublicKey(privKey.Public())
-	if err != nil {
-		fmt.Println("Failed To Encode RSA Key To DER Format! Error: ", err)
-		return errors.New("1")
-	}
-	
-	fmt.Println("PubKey:", derPubKey)
-	
-	return nil
-}
-
 func main() {
 	fmt.Println("Starting Server...")
 	listener := startListener()
 	defer listener.Close()
 	
 	var err error
-	privKey, err = rsa.GenerateKey(rand.Reader, 1024)
+	PrivKey, err = rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		fmt.Println("Failed To Generate RSA Key! Error: ", err)
 		os.Exit(1)
 	}
 	
-	privKey.Precompute()
+	PrivKey.Precompute()
 	
 	for {
 		connection, err := listener.Accept()
