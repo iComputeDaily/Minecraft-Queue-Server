@@ -2,26 +2,26 @@ package main
 
 import "fmt"
 import "errors"
+import "strings"
+import "encoding/json"
+import "net/http"
+import "io/ioutil"
 import "crypto/rand"
 import "crypto/rsa"
 import "crypto/x509"
-// import "crypto/cipher"
+import "crypto/aes"
+import "crypto/sha1"
+import "github.com/google/uuid"
 import mcnet "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
-import "crypto/sha1"
-import "strings"
-import "net/http"
-import "io/ioutil"
-import "encoding/json" 
+import "github.com/Tnze/go-mc/net/CFB8"
 
 // Player represents information about a connected player.
 type Player struct {
 	name string
-	uuid packet.UUID
+	uuid uuid.UUID
 	connection mcnet.Conn
 	token [4]byte
-	key [16]byte
-//	encoStream, decoStream cipher.Stream
 }
 
 // AuthResponse represents a response from the mojang auth server
@@ -166,7 +166,24 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 		return err
 	}
 	
-	fmt.Printf("response: %+v\n\nbody: %s", response, body)
+	fmt.Printf("response: %+v\n\nbody: %s\n", response, body)
+	
+	player.name = response.Name
+	player.uuid, err = uuid.ParseBytes([]byte(response.Id))
+	if err != nil {
+		return err
+	}
+	
+	fmt.Println("uuid: ", player.uuid)
+	
+	cipher, err := aes.NewCipher(sharedSecret[:])
+	if err != nil {
+		return err
+	}
+	decoStream := CFB8.NewCFB8Decrypt(cipher, sharedSecret[:])
+	encoStream := CFB8.NewCFB8Encrypt(cipher, sharedSecret[:])
+	
+	player.connection.SetCipher(encoStream, decoStream)
 	
 	return nil
 }
