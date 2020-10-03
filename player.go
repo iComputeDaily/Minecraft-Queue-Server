@@ -10,6 +10,9 @@ import mcnet "github.com/Tnze/go-mc/net"
 import "github.com/Tnze/go-mc/net/packet"
 import "crypto/sha1"
 import "strings"
+import "net/http"
+import "io/ioutil"
+import "encoding/json" 
 
 // Player represents information about a connected player.
 type Player struct {
@@ -19,6 +22,17 @@ type Player struct {
 	token [4]byte
 	key [16]byte
 //	encoStream, decoStream cipher.Stream
+}
+
+// AuthResponse represents a response from the mojang auth server
+type AuthResponse struct {
+	Id string
+	Name string
+	Properties []struct {
+		Name string
+		Value string
+		Signature string
+	}
 }
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
@@ -134,6 +148,25 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 	}
 	
 	fmt.Println("Hash:", hash)
+	
+	resp, err := http.Get(fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/hasJoined?username=%s&serverId=%s", player.name, hash))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return errors.New(fmt.Sprintln("Mojang Auth Server Responded With An Error! Error:", resp.Status))
+	}
+	
+	body, err := ioutil.ReadAll(resp.Body)
+	
+	var response AuthResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	
+	fmt.Printf("response: %+v\n\nbody: %s", response, body)
 	
 	return nil
 }
