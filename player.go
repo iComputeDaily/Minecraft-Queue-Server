@@ -37,10 +37,10 @@ type AuthResponse struct {
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
 func (player *Player) handleLogin() {
-	for packetNum := 0; packetNum < 2; packetNum++ {
+	for packetNum := 0; packetNum < 3; packetNum++ {
 		data, err := player.connection.ReadPacket()
 		if err != nil {
-			fmt.Println("Failed To Read Login Packet! Error:", err)
+			fmt.Println("Failed To Read Login Packet! Number: ", packetNum, "Error:", err)
 			return
 		}
 		
@@ -74,10 +74,22 @@ func (player *Player) handleLogin() {
 					return
 				}
 				
-				// BUG(iComputeDaily): Might need to send raw public key data not shure
+				fmt.Println("sharedSecret: ", sharedSecret)
+				
 				err = player.authUser(sharedSecret)
 				if err != nil {
 					fmt.Println("Failed To Authenticate User! Error: ", err)
+					return
+				}
+				
+//				err = player.connection.WritePacket(packet.Marshal(0x03, packet.VarInt(-1)))
+//				if err != nil {
+//					fmt.Println("Failed To Send Set Compression Packet! Error: ", err)
+//				}
+				
+				err = player.sendLoginSucsess()
+				if err != nil {
+					fmt.Println("Failed To Send Login Sucsess Packet! Error: ", err)
 					return
 				}
 		}
@@ -174,8 +186,6 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 		return err
 	}
 	
-	fmt.Println("uuid: ", player.uuid)
-	
 	cipher, err := aes.NewCipher(sharedSecret[:])
 	if err != nil {
 		return err
@@ -226,4 +236,15 @@ func twosComplement(p []byte) []byte {
 		}
 	}
 	return p
+}
+
+func (player *Player) sendLoginSucsess() error {
+	fmt.Println("name: ", player.name, "uuid: ", player.uuid.String())
+	
+	err := player.connection.WritePacket(packet.Marshal(0x02, packet.String(player.uuid.String()), packet.String(player.name)))
+	if err != nil {
+		return err
+	}
+	
+	return nil
 }
