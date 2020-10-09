@@ -48,7 +48,7 @@ func (player *Player) handleLogin() {
 			default:
 				fmt.Println("Invalid Login Packet Id! ID: ", data.ID)
 				
-			case 0x00:
+			case 0x00: // login start
 				err := player.handleLoginStart(data)
 				if err != nil {
 					fmt.Println("Failed To Parse Login Packet! Error: ", err)
@@ -56,17 +56,40 @@ func (player *Player) handleLogin() {
 				
 				fmt.Println("Player Name:", player.name, "Requested join")
 				
-				_, err = rand.Read(player.token[:])
-				if err != nil {
-					fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
-					return
+				if offlineMode == false { // authenticate and encrypt connection
+					_, err = rand.Read(player.token[:])
+					if err != nil {
+						fmt.Println("Failed To Read Random Data For Login Token! Error: ", err)
+						return
+					}
+					err = player.sendEncRequest()
+					if err != nil {
+						fmt.Println("Failed To Send Encryption Request! Error: ", err)
+						return
+					}
+				} else { // if the server is set to offline mode
+					if comperssionThreshold > 0 {
+						err = player.connection.WritePacket(packet.Marshal(0x03, packet.VarInt(comperssionThreshold)))
+						if err != nil {
+							fmt.Println("Failed To Send Set Compression Packet! Error: ", err)
+							return
+						}
+						player.connection.SetThreshold(comperssionThreshold)
+					}
+					
+					_, err = rand.Read(player.uuid[:])
+					if err != nil {
+						fmt.Println("Failed To Read Random Uuid! Error: ", err)
+						return
+					}
+					
+					err = player.sendLoginSucsess()
+					if err != nil {
+						fmt.Println("Failed To Send Login Sucsess Packet! Error: ", err)
+						return
+					}
 				}
-				err = player.sendEncRequest()
-				if err != nil {
-					fmt.Println("Failed To Send Encryption Request! Error: ", err)
-					return
-				}
-			case 0x01:
+			case 0x01: // encryption response
 				sharedSecret, err := player.handleEncResponse(data)
 				if err != nil {
 					fmt.Println("Failed To Prosses Encryption Response! Error: ", err)
@@ -77,6 +100,15 @@ func (player *Player) handleLogin() {
 				if err != nil {
 					fmt.Println("Failed To Authenticate User! Error: ", err)
 					return
+				}
+				
+				if comperssionThreshold >= 0 {
+					err = player.connection.WritePacket(packet.Marshal(0x03, packet.VarInt(comperssionThreshold)))
+					if err != nil {
+						fmt.Println("Failed To Send Set Compression Packet! Error: ", err)
+						return
+					}
+					player.connection.SetThreshold(comperssionThreshold)
 				}
 				
 				err = player.sendLoginSucsess()
@@ -127,8 +159,7 @@ func (player *Player) handleEncResponse(data packet.Packet) ([16]byte, error) {
 	var decVerifyToken [4]byte
 	err = rsa.DecryptPKCS1v15SessionKey(rand.Reader, PrivKey, encVerifyToken, decVerifyToken[:])
 	if err != nil {
-		fmt.Println("Failed To Decrypt Verify Token! Error: ", err)
-		return [16]byte{0}, errors.New("1")
+		return [16]byte{0}, errors.New(fmt.Sprintln("Failed To Decrypt Verify Token! Error: ", err))
 	}
 	if player.token != decVerifyToken {
 		return [16]byte{0}, errors.New(fmt.Sprintln("Verify Tokens Do not Match!"))
@@ -146,11 +177,13 @@ func (player *Player) handleEncResponse(data packet.Packet) ([16]byte, error) {
 
 // authUser is called by handleLogin to authentication the user with mojang
 func (player *Player) authUser(sharedSecret [16]byte) error {
+	// generate hash
 	hash, err := authDigest("", sharedSecret)
 	if err != nil {
 		return err
 	}
 	
+	// get uuid from mojang auth server
 	resp, err := http.Get(fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/hasJoined?username=%s&serverId=%s", player.name, hash))
 	if err != nil {
 		return err
@@ -168,12 +201,16 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 		return err
 	}
 	
-	player.name = response.Name
+	if player.name != response.Name{
+		return errors.New("Idk Wtf Happened, But Somehow The Uuids Don't Match")
+	}
+	
 	player.uuid, err = uuid.ParseBytes([]byte(response.Id))
 	if err != nil {
 		return err
 	}
 	
+	// setup encryption
 	cipher, err := aes.NewCipher(sharedSecret[:])
 	if err != nil {
 		return err
@@ -186,6 +223,7 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 	return nil
 }
 
+// authDigest is called by authUser to generate the minecraft style verification hash(stolen form go-mc bot)
 func authDigest(serverID string, sharedSecret [16]byte) (string, error) {
 	derPubKey, err := x509.MarshalPKIXPublicKey(PrivKey.Public())
 	if err != nil {
@@ -226,6 +264,7 @@ func twosComplement(p []byte) []byte {
 	return p
 }
 
+// sendLoginSucsess is called by handleLogin to send the login sucsess packet
 func (player *Player) sendLoginSucsess() error {
 	fmt.Println("name: ", player.name, "uuid: ", player.uuid.String())
 	
