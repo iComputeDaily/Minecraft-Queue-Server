@@ -66,7 +66,6 @@ func (player *Player) handleLogin() {
 					fmt.Println("Failed To Send Encryption Request! Error: ", err)
 					return
 				}
-				
 			case 0x01:
 				sharedSecret, err := player.handleEncResponse(data)
 				if err != nil {
@@ -241,7 +240,7 @@ func twosComplement(p []byte) []byte {
 func (player *Player) sendLoginSucsess() error {
 	fmt.Println("name: ", player.name, "uuid: ", player.uuid.String())
 	
-	err := player.connection.WritePacket(packet.Marshal(0x02, packet.String(player.uuid.String()), packet.String(player.name)))
+	err := player.connection.WritePacket(packet.Marshal(0x02, packet.UUID(player.uuid), packet.String(player.name)))
 	if err != nil {
 		return err
 	}
