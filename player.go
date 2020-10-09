@@ -73,18 +73,11 @@ func (player *Player) handleLogin() {
 					return
 				}
 				
-				fmt.Println("sharedSecret: ", sharedSecret)
-				
 				err = player.authUser(sharedSecret)
 				if err != nil {
 					fmt.Println("Failed To Authenticate User! Error: ", err)
 					return
 				}
-				
-//				err = player.connection.WritePacket(packet.Marshal(0x03, packet.VarInt(-1)))
-//				if err != nil {
-//					fmt.Println("Failed To Send Set Compression Packet! Error: ", err)
-//				}
 				
 				err = player.sendLoginSucsess()
 				if err != nil {
@@ -158,8 +151,6 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 		return err
 	}
 	
-	fmt.Println("Hash:", hash)
-	
 	resp, err := http.Get(fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/hasJoined?username=%s&serverId=%s", player.name, hash))
 	if err != nil {
 		return err
@@ -176,8 +167,6 @@ func (player *Player) authUser(sharedSecret [16]byte) error {
 	if err != nil {
 		return err
 	}
-	
-	fmt.Printf("response: %+v\n\nbody: %s\n", response, body)
 	
 	player.name = response.Name
 	player.uuid, err = uuid.ParseBytes([]byte(response.Id))
