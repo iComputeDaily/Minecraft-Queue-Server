@@ -13,7 +13,7 @@ var PrivKey *rsa.PrivateKey
 
 // holds config settings
 var comperssionThreshold = 0
-var offlineMode = true
+var offlineMode = false
 
 // startListener is called once to start listening for connections.
 func startListener() *mcnet.Listener {
@@ -59,6 +59,7 @@ func handleConnection(connection mcnet.Conn) {
 			var player Player
 			player.connection = connection
 			player.handleLogin()
+			player.handlePlaying()
 	}
 	
 }

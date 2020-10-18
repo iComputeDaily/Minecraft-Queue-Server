@@ -37,7 +37,7 @@ type AuthResponse struct {
 
 // handleLogin is called by handleConnection on any connections with handshake intention 2(login).
 func (player *Player) handleLogin() {
-	for packetNum := 0; packetNum < 3; packetNum++ {
+	for packetNum := 0; packetNum < 2; packetNum++ {
 		data, err := player.connection.ReadPacket()
 		if err != nil {
 			fmt.Println("Failed To Read Login Packet! Number: ", packetNum, "Error:", err)
@@ -88,6 +88,8 @@ func (player *Player) handleLogin() {
 						fmt.Println("Failed To Send Login Sucsess Packet! Error: ", err)
 						return
 					}
+					
+					return
 				}
 			case 0x01: // encryption response
 				sharedSecret, err := player.handleEncResponse(data)
@@ -102,7 +104,7 @@ func (player *Player) handleLogin() {
 					return
 				}
 				
-				if comperssionThreshold >= 0 {
+				if comperssionThreshold > 0 {
 					err = player.connection.WritePacket(packet.Marshal(0x03, packet.VarInt(comperssionThreshold)))
 					if err != nil {
 						fmt.Println("Failed To Send Set Compression Packet! Error: ", err)
@@ -116,6 +118,8 @@ func (player *Player) handleLogin() {
 					fmt.Println("Failed To Send Login Sucsess Packet! Error: ", err)
 					return
 				}
+				
+				return
 		}
 	}
 }
