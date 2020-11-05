@@ -7,12 +7,14 @@ import "bytes"
 import "github.com/Tnze/go-mc/nbt"
 // import "errors"
 
+// Wraper type for nbt data because it dosn't exist in the library...
 type nbtWrap struct {
 	Value interface{} // Holds struct of nbt data
 	buf *bytes.Buffer // Holds encoded nbt
 	enc *nbt.Encoder  // An encoder object
 }
 
+// Holds the dimention and biome defenitions
 type dimensionCodec struct {
 	DimensionType struct {
 		Type string       `nbt:"type"`
@@ -25,6 +27,7 @@ type dimensionCodec struct {
 	} `nbt:"minecraft:worldgen/biome"`
 }
 
+// Defines one dimension
 type dimension struct {
 	Name string `nbt:"name"`
 	Id int      `nbt:"id"` // BUG(iComputeDaily): might be another number type not shure
@@ -46,39 +49,37 @@ type dimension struct {
 	} `nbt:"element"`
 }
 
+// Defines one biome
 type biome struct {
 	
 }
 
+// Endode encodes the nbt data and returns 
 func (nbtData nbtWrap) Encode() []byte {
 	if nbtData.buf == nil {
-		// make an empty buffer
 		nbtData.buf = &bytes.Buffer{}
 	}
-	
 	if nbtData.enc == nil {
-		// make an encoder on the buffer
 		nbtData.enc = nbt.NewEncoder(nbtData.buf)
 	}
 	
-	// clear the buffer - allows memory to be reused
 	nbtData.buf.Reset()
 	
-	// encode to the buffer
 	err := nbtData.enc.Encode(nbtData.Value)
 	
 	if err != nil {
 		panic(fmt.Sprintln("Failed To Encode! Error: ", err))
 	}
 	
-	// get bytes from the buffer
 	return nbtData.buf.Bytes()
 }
 
+// Called after login to handle when the player plays
 func (player *Player) handlePlaying() {
 	player.sendJoinGame()
 }
 
+// Sends the join game packet
 func (player *Player) sendJoinGame() {
 	var nbtDimCodec nbtWrap
 	var dimCodec dimensionCodec
@@ -109,5 +110,6 @@ func (player *Player) sendJoinGame() {
 		return
 	}
 	
+	// For testing until something else replaces it
 	time.Sleep(3600 * time.Second)
 }
